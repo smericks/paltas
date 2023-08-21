@@ -116,7 +116,7 @@ class SPLCORE(MainDeflectorBase):
 		"""
 		# The lists of model parameters, kwargs, and redshifts can all be
 		# pulled fairly directly from the main_deflecctor_parameters
-		md_model_list = ['SPLCORE']
+		md_model_list = ['SPL_CORE']
 		md_kwargs_list = []
 		md_z_list = [self.main_deflector_parameters['z_lens']] * len(
 			md_model_list)
