@@ -7,7 +7,7 @@ This module contains classes that define distributions that can be effecitvely
 sampled from.
 """
 import numpy as np
-from scipy.stats import truncnorm, uniform
+from scipy.stats import truncnorm, uniform, multivariate_normal
 from astropy.io import fits
 from lenstronomy.Util import kernel_util
 
@@ -381,7 +381,44 @@ class FourComponentCorrelatedCenter():
 		y_src = y_lm + y_scat_src
 
 		return x_lm,y_lm,x_ll,y_ll,x_src,y_src,x_src,y_src
-	
+
+class FullCovSequentialCorrelatedCenters():
+	"""Class that samples predicted lens model parameters from a full
+		covariance Gaussian, and additionally samples a correlated lens light
+		center and idential point source center based on the sample of 
+		x/y_lens, x/y_src.
+
+	HARDCODED ORDERING:
+		theta_E, gamma1, gamma2, gamma_lens, e1, e2, x_lens, y_lens, 
+		x_src, y_src, x_ll, y_ll, x_ps, y_ps
+		
+	Args:
+		mu_pred ([n_params]): 
+		cov_pred ([n_params,n_params]):
+		ll_scatter (float): 1sigma for the Gaussian draw of lens light 
+			coordinates (mu is set to x/y_lens)
+	"""
+
+	def __init__(self,mu_pred,cov_pred,ll_scatter):
+
+		self.full_cov_sampler = multivariate_normal(mean=mu_pred,cov=cov_pred)
+		self.ll_scatter = ll_scatter
+
+	def __call__(self):
+		"""Returns a sample in HARDCODED order: (theta_E, gamma1, gamma2, 
+			gamma_lens, e1, e2, x_lens, y_lens, x_src, y_src, x_ll, y_ll, 
+			x_ps, y_ps)
+		"""
+
+		my_samp = self.full_cov_sampler.rvs()
+		# x_ll
+		x_ll = my_samp[6]+np.random.randn()*self.ll_scatter
+		# y_ll
+		y_ll = my_samp[7]+np.random.randn()*self.ll_scatter
+		
+		my_samp = np.append(my_samp,[x_ll,y_ll,my_samp[8],my_samp[9]])
+
+		return my_samp
 
 class RedshiftsTruncNorm():
 	"""Class that samples z_lens and z_source from truncated normal
