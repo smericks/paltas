@@ -121,7 +121,11 @@ class ConfigHandler():
 			self.ps_magnification_cut = self.config_module.ps_magnification_cut
 		else:
 			self.ps_magnification_cut = None
-
+			
+		if hasattr(self.config_module, 'magnification_limit'):
+			self.magnification_limit = self.config_module.magnification_limit
+		else:
+			self.magnification_limit = None
 
 		# Set up the paltas objects we'll use
 		self.los_class = None
@@ -584,6 +588,7 @@ class ConfigHandler():
 		point_source_model = PointSource(
 			kwargs_model['point_source_model_list'],lens_model=lens_model,
 			save_cache=True,kwargs_lens_eqn_solver=lens_equation_params,
+			magnification_limit=self.magnification_limit,
             fixed_magnification_list=[True])
 
 		# Put it together into an image model
