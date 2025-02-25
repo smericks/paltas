@@ -461,6 +461,10 @@ class ConfigHandler():
 		# throw error if num images > 5
 		if num_images > 5:
 			raise FailedCriteriaError()
+		
+		# it's no longer a lens in this case!
+		if num_images < 2:
+			raise FailedCriteriaError()
 
 		if self.doubles_quads_only and num_images != 2 and num_images != 4:
 			raise FailedCriteriaError()
