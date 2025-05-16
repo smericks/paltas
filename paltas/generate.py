@@ -20,7 +20,7 @@ import shutil
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import pandas as pd
-from paltas.Configs.config_handler import ConfigHandler
+from paltas.Configs.config_handler_catalog import ConfigHandler
 import h5py
 
 def parse_args():
@@ -45,7 +45,6 @@ def parse_args():
 		help='Saves all the images as a single .h5 file rather than multiple .npy files')
 	args = parser.parse_args()
 	return args
-
 
 def main():
 	"""Generates the strong lensing images by drawing parameters values from
@@ -154,7 +153,6 @@ def main():
 		# Generate the TFRecord
 		dataset_generation.generate_tf_record(args.save_folder,learning_params,
 			metadata_path,tf_record_path,h5=args.h5)
-
 
 if __name__ == '__main__':
 	main()

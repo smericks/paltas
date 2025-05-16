@@ -76,7 +76,7 @@ class ConfigHandler():
 		self.base_seed = getattr(
 			self.config_module,
 			'seed',
-			(np.random.randint(np.iinfo(np.uint32).max,)))
+			(np.random.randint(0,high=2*32-2,dtype=np.int64)))
 		# Make sure base_seed is a sequence, not a number
 		if isinstance(self.base_seed, (int, float)):
 			self.base_seed = (self.base_seed,)
@@ -121,7 +121,11 @@ class ConfigHandler():
 			self.ps_magnification_cut = self.config_module.ps_magnification_cut
 		else:
 			self.ps_magnification_cut = None
-
+			
+		if hasattr(self.config_module, 'magnification_limit'):
+			self.magnification_limit = self.config_module.magnification_limit
+		else:
+			self.magnification_limit = None
 
 		# Set up the paltas objects we'll use
 		self.los_class = None
@@ -310,7 +314,6 @@ class ConfigHandler():
 		# also what the lens model classes use when setting their parameters.
 		kwargs_model['z_source'] = sample['source_parameters']['z_source']
 		kwargs_model['z_source_convention'] = kwargs_model['z_source']
-
 		return kwargs_model, kwargs_params
 
 	def get_metadata(self):
@@ -457,6 +460,10 @@ class ConfigHandler():
 		# throw error if num images > 5
 		if num_images > 5:
 			raise FailedCriteriaError()
+		
+		# it's no longer a lens in this case!
+		if num_images < 2:
+			raise FailedCriteriaError()
 
 		if self.doubles_quads_only and num_images != 2 and num_images != 4:
 			raise FailedCriteriaError()
@@ -584,6 +591,7 @@ class ConfigHandler():
 		point_source_model = PointSource(
 			kwargs_model['point_source_model_list'],lens_model=lens_model,
 			save_cache=True,kwargs_lens_eqn_solver=lens_equation_params,
+			magnification_limit=self.magnification_limit,
             fixed_magnification_list=[True])
 
 		# Put it together into an image model
@@ -841,7 +849,7 @@ class ConfigHandler():
 		self.reseed_counter += 1
 		# Seed numba's separate random generator
 		# Unfortunately it only accepts an integer argument
-		_set_numba_seed(np.random.randint(np.iinfo(np.uint32).max))
+		_set_numba_seed(np.random.randint(0,high=2*32-2,dtype=np.int64))
 		return seed
 
 

@@ -81,7 +81,7 @@ class SubhalosDG19(SubhalosBase):
 		"""
 		# Equation from DG_19
 		log_f = k1 * np.log10(host_m200/1e13) + k2 * np.log10(z_lens+0.5)
-		return 10**log_f
+		return 10**(log_f)
 
 	def draw_nfw_masses(self):
 		"""Draws from the https://arxiv.org/pdf/1909.02573.pdf subhalo mass
@@ -109,6 +109,14 @@ class SubhalosDG19(SubhalosBase):
 
 		# Calculate the overall norm of the power law. This includes host
 		# scaling, sigma_sub, and the area of interest.
+		#print('M200:')
+		#print(host_m200)
+		#print('z_lens:')
+		#print(z_lens)
+		#print('k1:')
+		#print(k1)
+		#print('k2:')
+		#print(k2)
 		f_host = self.host_scaling_function(host_m200,z_lens,k1=k1,k2=k2)
 
 		# In DG_19 subhalos are rendered up until 3*theta_E.
