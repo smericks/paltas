@@ -21,7 +21,7 @@ CROSSOBJECTWARNING = True
 
 class Sampler():
 	"""Class for drawing lens parameter values from input distribution
-	dictionaries
+	dictionaries.
 
 	Args:
 		configuration_dictionary (dict): An instance of the configuration
@@ -83,11 +83,11 @@ class Sampler():
 
 	def sample(self):
 		"""Samples from the distributions given in the configuration
-		dictionary
+		dictionary.
 
 		Returns:
 			(dict): A dictionary containing the parameter values that will
-			be sampled.
+				be sampled.
 		"""
 		# Pull the global warning variable and initialize our dict
 		global CROSSOBJECTWARNING
@@ -122,6 +122,19 @@ class Sampler():
 		return full_param_dict
 	
 	def get_sample_dist(self):
+		"""Samples from the distributions given in the configuration
+		dictionary.
+
+		Returns:
+			(dict): A dictionary containing the parameter values that will
+				be sampled.
+
+		Notes:
+		# Author: Padma Venkatraman
+		# GitHub: padma18-vb
+		# email: pv10@illinois.edu
+		"""
+		# Pull the global warning variable and initialize our dict
 		global CROSSOBJECTWARNING
 		full_param_dict = {}
 
@@ -143,6 +156,21 @@ class Sampler():
 	
 
 	def catalog_sample(self, index):
+		"""Samples parameters from the catalog file given in the config.
+
+		Args:
+			index (int): None, single integer value, or range of values to indicate specific rows in the catalog to draw from. 
+				If none, will sample all rows.
+
+		Returns:
+			(dict): A dictionary containing the parameter values that will
+				be sampled.
+			
+		Notes:
+		# Author: Padma Venkatraman
+		# GitHub: padma18-vb
+		# email: pv10@illinois.edu
+		"""
 		path_to_deflectors = self.config_dict['main_deflector']['file']
 		deflectors_catalog = pd.read_csv(path_to_deflectors, index_col=0)
 		# initially, the indices array will be empty (or None); populate it
@@ -184,6 +212,21 @@ class Sampler():
 		return full_param_dict
 	
 	def draw_from_catalog(self, component, index):
+		"""Populates a dict with samples drawn from the specified distributions
+		in the input dict.
+
+		Args:
+			component (str): Lensing component from config_dict.
+			index (int): None, single integer value, or range of values to indicate specific rows in the catalog to draw from
+
+		Returns:
+			(dict): A dict with a drawn value for each parameter.
+
+		Notes:
+		# Author: Padma Venkatraman
+		# GitHub: padma18-vb
+		# email: pv10@illinois.edu
+		"""
 		param_dict = {}
 		
 		draw_from_file = self.config_dict[component]['file']
