@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+# Author: Padma Venkatraman
+# GitHub: padma18-vb
+# email: pv10@illinois.edu
 """
 Interact with the paltas configuration files
 
@@ -62,7 +65,7 @@ class ConfigHandler():
 		config_path (str): A path to the config file to parse.
 	"""
 
-	def __init__(self,config_path,):
+	def __init__(self,config_path,index=None):
 		# Get the dictionary from the provided .py file
 		config_dir, config_file = os.path.split(os.path.abspath(config_path))
 		sys.path.insert(0, config_dir)
@@ -76,14 +79,15 @@ class ConfigHandler():
 		self.base_seed = getattr(
 			self.config_module,
 			'seed',
-			(np.random.randint(np.iinfo(np.uint32).max,)))
+			(np.random.randint(np.iinfo(np.uint32).max, dtype=np.int64)))
 		# Make sure base_seed is a sequence, not a number
 		if isinstance(self.base_seed, (int, float)):
 			self.base_seed = (self.base_seed,)
 		self.reseed_counter = 0
-
+		self.catalog = self.config_module.catalog
+		self.index = index
 		# Set up our sampler and draw a sample for initialization
-		self.sampler = Sampler(self.config_dict)
+		self.sampler = Sampler(configuration_dictionary=self.config_dict)
 		self.sample = None
 		self.draw_new_sample()
 		sample = self.get_current_sample()
@@ -100,6 +104,11 @@ class ConfigHandler():
 			self.doubles_quads_only = self.config_module.doubles_quads_only
 		else:
 			self.doubles_quads_only = False
+
+		if hasattr(self.config_module, 'no_singles'):
+			self.no_singles = self.config_module.no_singles
+		else:
+			self.no_singles = False
 
 		# handle quads_only
 		if hasattr(self.config_module, 'quads_only'):
@@ -121,11 +130,26 @@ class ConfigHandler():
 			self.ps_magnification_cut = self.config_module.ps_magnification_cut
 		else:
 			self.ps_magnification_cut = None
-			
-		if hasattr(self.config_module, 'magnification_limit'):
-			self.magnification_limit = self.config_module.magnification_limit
+		
+		if hasattr(self.config_module, 'subtract_lens'):
+			self.subtract_lens = self.config_module.subtract_lens
 		else:
-			self.magnification_limit = None
+			self.subtract_lens = False
+
+		if hasattr(self.config_module, 'subtract_source'):
+			self.subtract_source = self.config_module.subtract_source
+		else:
+			self.subtract_source = False
+
+		if hasattr(self.config_module, 'compute_PSF_FWHM'):
+			self.compute_PSF_FWHM = self.config_module.compute_PSF_FWHM
+		else:
+			self.compute_PSF_FWHM = False
+
+		if hasattr(self.config_module, 'reduce_noise_by'):
+			self.reduce_noise_by = self.config_module.reduce_noise_by
+		else:
+			self.reduce_noise_by = False
 
 		# Set up the paltas objects we'll use
 		self.los_class = None
@@ -172,10 +196,21 @@ class ConfigHandler():
 		else:
 			self.add_noise = True
 
+	def get_sample_dict(self):
+		"""Returns the distribution we're sampling from for each of the parameters.
+		
+		Returns:
+			(dict): key: parameter; value: sample distribution entered in config file
+		"""
+		return self.sampler.get_sample_dist()
+	
 	def draw_new_sample(self):
 		"""Draws a new sample from the config sampler.
 		"""
-		self.sample = self.sampler.sample()
+		if self.catalog:
+			self.sample = self.sampler.catalog_sample(index=self.index)
+		else:
+			self.sample = self.sampler.sample()
 
 	def get_current_sample(self):
 		"""Returns the current sample from the config sampler.
@@ -240,6 +275,7 @@ class ConfigHandler():
 			complete_lens_model_kwargs += los_kwargs_list + interp_kwargs_list
 			complete_z_list += los_z_list + interp_z_list
 		if self.subhalo_class is not None:
+			print(self.subhalo_class['class'])
 			self.subhalo_class.update_parameters(
 				sample['subhalo_parameters'],
 				sample['main_deflector_parameters'],
@@ -278,7 +314,7 @@ class ConfigHandler():
 
 		# For catalog objects we also want to save the catalog index
 		# and the (possibly randomized) additional rotation angle. We will
-		# therefore push these back into the sample object.
+		# therefore push these into the sample object.
 		if isinstance(self.source_class,GalaxyCatalog):
 			catalog_i, phi = self.source_class.fill_catalog_i_phi_defaults()
 			source_model_list, source_kwargs_list, source_redshift_list = (
@@ -341,6 +377,9 @@ class ConfigHandler():
 		# Get the samples and the metadata.
 		sample = self.get_current_sample()
 		metadata = {}
+		if self.catalog:
+			metadata['obj_index'] = sample['obj_index']
+			sample.pop('obj_index', None)
 
 		for component in sample:
 			for key in sample[component]:
@@ -392,7 +431,6 @@ class ConfigHandler():
 				r_core=kwargs_params['kwargs_lens'][0]['r_core'], 
 				gamma=kwargs_params['kwargs_lens'][0]['gamma'])
 			metadata['main_deflector_parameters_M_encl_15e-1arcsec'] = mass_enclosed
-
 
 		return metadata
 
@@ -446,6 +484,14 @@ class ConfigHandler():
 			kwargs_params['kwargs_lens'])
 		num_images = len(x_image[0])
 
+		# Compute fermat potential at those image positions
+		fermat_potentials=lens_model.fermat_potential(x_image, y_image, kwargs_params['kwargs_lens'],
+                                           kwargs_params['kwargs_ps'][0]['ra_source'],
+                                           kwargs_params['kwargs_ps'][0]['dec_source'])
+		print('fermat_potentials: ', fermat_potentials)
+
+		#TODO: Calculate luminosity magnitude for subhalos and write to metadata.
+
 		# Append to the metadata using the same prefix as the rest of the
 		# point source parameters
 		pfix = 'point_source_parameters_'
@@ -458,15 +504,14 @@ class ConfigHandler():
 	    	- kwargs_params['kwargs_lens'][0]['center_y'])
 		metadata[pfix+'lens_ps_offset'] = np.sqrt(x_diff**2 + y_diff**2)
 		
+		if self.no_singles and num_images == 1:
+			raise FailedCriteriaError()
 		# throw error if num images > 5
 		if num_images > 5:
 			raise FailedCriteriaError()
-		
-		# it's no longer a lens in this case!
-		if num_images < 2:
-			raise FailedCriteriaError()
 
 		if self.doubles_quads_only and num_images != 2 and num_images != 4:
+			print('true!!')
 			raise FailedCriteriaError()
 
 		# throw error if not quad & requested quads only
@@ -515,12 +560,14 @@ class ConfigHandler():
 				metadata[pfix+'x_image_'+str(i)] = x_image[0][i]
 				metadata[pfix+'y_image_'+str(i)] = y_image[0][i]
 				metadata[pfix+'magnification_'+str(i)] = magnifications[i]
+				metadata[pfix+'fermat_potentials_'+str(i)] = fermat_potentials[0][i]
 				if 'mag_pert' in sample['point_source_parameters'].keys():
 					metadata[pfix+'mag_pert_'+str(i)] = sample['point_source_parameters']['mag_pert'][i]
 			else:
 				metadata[pfix+'x_image_'+str(i)] = np.nan
 				metadata[pfix+'y_image_'+str(i)] = np.nan
 				metadata[pfix+'magnification_'+str(i)] = np.nan
+				metadata[pfix+'fermat_potentials_'+str(i)] =np.nan
 				if 'mag_pert' in sample['point_source_parameters'].keys():
 					metadata[pfix+'mag_pert_'+str(i)] = np.nan
 
@@ -552,7 +599,6 @@ class ConfigHandler():
 		sample = self.get_current_sample()
 		kwargs_model, kwargs_params = self.get_lenstronomy_models_kwargs(
 			new_sample=False)
-
 		# Get the psf, detector, and pixel grid parameters from the sample
 		kwargs_psf = sample['psf_parameters']
 		kwargs_detector = sample['detector_parameters']
@@ -565,7 +611,8 @@ class ConfigHandler():
 			psf_model = PSF(**kwargs_psf)
 		else:
 			psf_model = PSF(psf_type='NONE')
-
+		
+		
 		# Build the data and noise models we'll use.
 		data_api = DataAPI(numpix=self.numpix,
 			kwargs_pixel_grid=kwargs_pixel_grid,**kwargs_detector)
@@ -586,13 +633,25 @@ class ConfigHandler():
 
 		# Point source may need lens eqn solver kwargs
         # Need to fix how fixed_magnification_list is handled
+		#lens_equation_params = {'search_window':kwargs_params['kwargs_lens'][0]['theta_E']*6,'min_distance': kwargs_params['kwargs_lens'][0]['theta_E']*6/200}
 		lens_equation_params = None
 		if 'lens_equation_solver_parameters' in sample.keys():
 			lens_equation_params = sample['lens_equation_solver_parameters']
+		# print('kwargs_model: ', kwargs_model)
+		# print('kwargs_params: ', kwargs_params)
+		# print('inputs to PointSource:')
+		# print("point_source_type_list,\nlens_model=None,\nfixed_magnification_list=None\n",
+		# "additional_images_list=None,\nflux_from_point_source_list=None,\nmagnification_limit=None\n",
+		# "save_cache=False,\nkwargs_lens_eqn_solver=None,\nindex_lens_model_list=None,\npoint_source_frame_list=None")
+		# print('--------------')
+		# print("point_source_type_list: kwargs_model['point_source_model_list']: ", kwargs_model['point_source_model_list'])
+		# print("lens_model: ", lens_model)
+		# print("save_cache: ", True)
+		# print("kwargs_lens_eqn_solver: ", lens_equation_params)
+		# print("fixed_magnification_list: ", [True])
 		point_source_model = PointSource(
 			kwargs_model['point_source_model_list'],lens_model=lens_model,
 			save_cache=True,kwargs_lens_eqn_solver=lens_equation_params,
-			magnification_limit=self.magnification_limit,
             fixed_magnification_list=[True])
 
 		# Put it together into an image model
@@ -601,10 +660,22 @@ class ConfigHandler():
 			point_source_model,kwargs_numerics=self.kwargs_numerics)
 
 		# Generate our image
+		# self.subtract_lens = True if we want to subtract lens; False if we want to keep lens
 		image = image_model.image(kwargs_params['kwargs_lens'],
 			kwargs_params['kwargs_source'],
 			kwargs_params['kwargs_lens_light'],
-			kwargs_params['kwargs_ps'])
+			kwargs_params['kwargs_ps'],
+			source_add = True,
+			lens_light_add = not self.subtract_lens,
+        	point_source_add= not self.subtract_source)
+		if self.subtract_lens or self.subtract_source:
+			image_with_all_light = image_model.image(kwargs_params['kwargs_lens'],
+				kwargs_params['kwargs_source'],
+				kwargs_params['kwargs_lens_light'],
+				kwargs_params['kwargs_ps'],
+				source_add = True,
+				lens_light_add = True,
+				point_source_add = True)
 
 		# Check for the magnification cut and apply it.
         # TODO: these assumptions break down w/ a point source in the model
@@ -622,12 +693,20 @@ class ConfigHandler():
 				raise FailedCriteriaError()
 
 		# If noise is specified, add it.
-		if add_noise:
-			image += single_band.noise_for_model(image)
+		# image contains all light
+		if add_noise and not (self.subtract_lens or self.subtract_source):
+			noise = single_band.noise_for_model(image)
+		elif add_noise and (self.subtract_lens or self.subtract_source):
+			noise = single_band.noise_for_model(image_with_all_light)
+		elif not add_noise:
+			noise = 0        
+		if self.reduce_noise_by:
+			noise = noise/self.reduce_noise_by
+		image += noise
 
 		# Extract the metadata from the sample
 		metadata = self.get_metadata()
-
+		metadata['psf_fwhm'] = psf_model.fwhm
 		# If a point source was specified, calculate the time delays
 		# and image positions.
 		if self.point_source_class is not None:
@@ -708,7 +787,7 @@ class ConfigHandler():
 			self.kwargs_numerics = kwargs_numerics_copy
 			self.numpix = numpix_copy
 			raise
-		
+
 		self.sample['detector_parameters']['pixel_scale'] = detector_pixel_scale
 		self.numpix = numpix_copy
 
@@ -755,7 +834,7 @@ class ConfigHandler():
 		psf_model_lenstronomy = PSF(**kwargs_psf)
 
 		if self.add_noise:
-			noise_model = single_band.noise_for_model
+			noise_model = single_band.noise_for_model       
 		else:
 			def noise_model(image):
 				return 0
@@ -850,7 +929,8 @@ class ConfigHandler():
 		self.reseed_counter += 1
 		# Seed numba's separate random generator
 		# Unfortunately it only accepts an integer argument
-		_set_numba_seed(np.random.randint(np.iinfo(np.uint32).max))
+		#_set_numba_seed(np.random.randint(0,high=2**32-2,dtype=np.int64))
+		_set_numba_seed(np.random.randint(np.iinfo(np.uint32).max, dtype=np.int64))
 		return seed
 
 

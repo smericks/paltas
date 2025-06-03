@@ -81,7 +81,7 @@ class SubhalosDG19(SubhalosBase):
 		"""
 		# Equation from DG_19
 		log_f = k1 * np.log10(host_m200/1e13) + k2 * np.log10(z_lens+0.5)
-		return 10**log_f
+		return 10**(log_f)
 
 	def draw_nfw_masses(self):
 		"""Draws from the https://arxiv.org/pdf/1909.02573.pdf subhalo mass

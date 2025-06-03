@@ -46,7 +46,6 @@ def parse_args():
 	args = parser.parse_args()
 	return args
 
-
 def main():
 	"""Generates the strong lensing images by drawing parameters values from
 	the provided configuration dictionary.
@@ -154,7 +153,6 @@ def main():
 		# Generate the TFRecord
 		dataset_generation.generate_tf_record(args.save_folder,learning_params,
 			metadata_path,tf_record_path,h5=args.h5)
-
 
 if __name__ == '__main__':
 	main()
