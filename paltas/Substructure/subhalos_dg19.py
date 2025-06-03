@@ -109,14 +109,6 @@ class SubhalosDG19(SubhalosBase):
 
 		# Calculate the overall norm of the power law. This includes host
 		# scaling, sigma_sub, and the area of interest.
-		#print('M200:')
-		#print(host_m200)
-		#print('z_lens:')
-		#print(z_lens)
-		#print('k1:')
-		#print(k1)
-		#print('k2:')
-		#print(k2)
 		f_host = self.host_scaling_function(host_m200,z_lens,k1=k1,k2=k2)
 
 		# In DG_19 subhalos are rendered up until 3*theta_E.
