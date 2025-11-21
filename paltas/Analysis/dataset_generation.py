@@ -121,10 +121,9 @@ def unnormalize_outputs(input_norm_path,learning_params,mean,standard_dev=None,
 			cov_mat[:,lpi,:] *= param_std
 			cov_mat[:,:,lpi] *= param_std
 			
-# TODO: write test after moving (make sure identity operation w/ unnormalized)
 def normalize_mu_prec(mu,prec_mat,input_norm_path):
     """Helper function to convert mu, prec_matrix to normalized parameter 
-        space
+    space
         
     Args:
         mu ([float]), shape: (dim): array of means for each param
