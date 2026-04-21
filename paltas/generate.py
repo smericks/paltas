@@ -69,18 +69,26 @@ def main():
 
 	# Initialize our config handler
 	config_handler = ConfigHandler(args.config_dict)
+	alpaca_returns = config_handler.alpaca_returns
 
 	# Generate our images
 	pbar = tqdm(total=args.n)
 	successes = 0
 	tries = 0
 	interim_image_list = []
+	if alpaca_returns:
+		interim_src_img_list = []
+		interim_psf_kernel_list = []
+		interim_sqrt_var_map_list = []
 	while successes < args.n:
 		# We always try
 		tries += 1
 
 		# Attempt to draw our image
-		image, metadata = config_handler.draw_image(new_sample=True)
+		if alpaca_returns:
+			image, metadata, src_img, psf_kernel, sqrt_variance_map = config_handler.draw_image(new_sample=True)
+		else:
+			image, metadata = config_handler.draw_image(new_sample=True)
 
 		# Failed attempt if there is no image output
 		if image is None:
@@ -109,8 +117,13 @@ def main():
 			metadata_list = []
 		successes += 1
 		interim_image_list.append(image) 
+		if alpaca_returns:
+			interim_src_img_list.append(src_img)
+			interim_psf_kernel_list.append(psf_kernel)
+			interim_sqrt_var_map_list.append(sqrt_variance_map)
 		if args.h5:
 			if successes==1:
+				print('sucesses = 1')
 				interim_image_array = np.array(interim_image_list)
 				with h5py.File(args.save_folder+'/image_data.h5', 'w') as hf:
 					hf.create_dataset("data",
@@ -120,6 +133,22 @@ def main():
 							  interim_image_array.shape[2])) 
 				interim_image_list=[]
 				del interim_image_array
+				# add in alpaca returns if necessary
+				if alpaca_returns:
+					data_lists = [interim_src_img_list,interim_psf_kernel_list,interim_sqrt_var_map_list]
+					data_keys = ['src_image','psf_kernel','sqrt_variance_map']
+					for d in range(0,len(data_lists)):
+						interim_data_array = np.array(data_lists[d])
+						with h5py.File(args.save_folder+'/image_data.h5', 'a') as hf:
+							hf.create_dataset(data_keys[d],
+							    data=interim_data_array,
+							    compression="gzip",
+							    maxshape=(None,interim_data_array.shape[1],
+							    interim_data_array.shape[2])) 
+						del interim_data_array
+					interim_src_img_list = []
+					interim_psf_kernel_list = []
+					interim_sqrt_var_map_list = []
 			# Saves as h5 file every 100 images:
 			elif successes%100==0 or successes==args.n:
 				interim_image_array = np.array(interim_image_list)
@@ -129,6 +158,20 @@ def main():
 					hf["data"][-interim_image_array.shape[0]:] = interim_image_array
 				interim_image_list=[]
 				del interim_image_array
+				if alpaca_returns:
+					data_lists = [interim_src_img_list,interim_psf_kernel_list,interim_sqrt_var_map_list]
+					data_keys = ['src_image','psf_kernel','sqrt_variance_map']
+					for d in range(0,len(data_lists)):
+						interim_data_array = np.array(data_lists[d])
+						# Loads the h5 file, extends its shape, then appends the new images generated and saves the file:
+						with h5py.File(args.save_folder+'/image_data.h5', 'a') as hf:
+							hf[data_keys[d]].resize((hf[data_keys[d]].shape[0] + interim_data_array.shape[0]), axis = 0)
+							hf[data_keys[d]][-interim_data_array.shape[0]:] = interim_data_array
+						del interim_data_array
+					interim_src_img_list = []
+					interim_psf_kernel_list = []
+					interim_sqrt_var_map_list = []
+						
 		pbar.update()
 
 	# Make sure the list has been cleared out.

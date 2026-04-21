@@ -126,6 +126,13 @@ class ConfigHandler():
 			self.magnification_limit = self.config_module.magnification_limit
 		else:
 			self.magnification_limit = None
+			
+        # ALPACA RETURNS OPTION
+		if hasattr(self.config_module, 'alpaca_returns'):
+			self.alpaca_returns = self.config_module.alpaca_returns
+		else:
+			self.alpaca_returns = False
+
 
 		# Set up the paltas objects we'll use
 		self.los_class = None
@@ -621,6 +628,9 @@ class ConfigHandler():
 			if mag < self.mag_cut:
 				raise FailedCriteriaError()
 
+        # estimate variance map before adding in noise
+		sqrt_variance_map = single_band.estimate_noise(image)
+
 		# If noise is specified, add it.
 		if add_noise:
 			image += single_band.noise_for_model(image)
@@ -640,6 +650,21 @@ class ConfigHandler():
 			# address case w/ 6 PS images
 			if success == -1:
 				return None,None
+
+		if self.alpaca_returns:
+			# update metadata to track INTERPOL kwargs
+			metadata['source_parameters_interpol_phi_G'] = kwargs_params['kwargs_source'][0]['phi_G']
+			metadata['source_parameters_interpol_center_x'] = kwargs_params['kwargs_source'][0]['center_x']
+			metadata['source_parameters_interpol_center_y'] = kwargs_params['kwargs_source'][0]['center_y']
+			metadata['source_parameters_interpol_scale'] = kwargs_params['kwargs_source'][0]['scale']
+			psf_kernel = kwargs_psf['kernel_point_source']
+			src_img = kwargs_params['kwargs_source'][0]['image']
+			metadata['source_parameters_interpol_original_numpix_x'] = src_img.shape[0]
+			metadata['source_parameters_interpol_original_numpix_y'] = src_img.shape[1]
+			# TODO: pad src_image to same size every time (1000x1000 to be conservative)
+			src_img_padded = np.zeros((1000,1000))
+			src_img_padded[:src_img.shape[0],:src_img.shape[1]] = src_img
+			return image, metadata, src_img_padded, psf_kernel, sqrt_variance_map
 
 		return image, metadata
 
@@ -811,6 +836,9 @@ class ConfigHandler():
 		try:
 			if self.do_drizzle:
 				image,metadata = self._draw_image_drizzle()
+			elif self.alpaca_returns:
+				image,metadata,src_img,psf_kernel,sqrt_variance_map = self._draw_image_standard(
+					add_noise=self.add_noise)
 			else:
 				# _draw_image_standard has a seperate add_noise parameter so
 				# it can be used by _draw_image_drizzle.
@@ -818,6 +846,9 @@ class ConfigHandler():
 					add_noise=self.add_noise)
 		except FailedCriteriaError:
 			# Image critera not met, return None,None.
+			if self.alpaca_returns:
+				return None,None,None,None,None
+			
 			return None, None
 		
 		# Mask out an interior region of the image if requested
@@ -830,6 +861,9 @@ class ConfigHandler():
 
 		# Save the seed
 		metadata['seed'] = seed
+		
+		if self.alpaca_returns:
+			return image, metadata, src_img, psf_kernel, sqrt_variance_map
 
 		return image,metadata
 
